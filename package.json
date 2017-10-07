@@ -1,0 +1,25 @@
+{
+  "name": "glue-basket",
+  "version": "0.0.1",
+  "description": "Another pastebin clone",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "pastebin"
+  ],
+  "author": "Arman Elahi",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "body-parser": "^1.18.2",
+    "express": "^4.16.1",
+    "helmet": "^3.8.2",
+    "jsonwebtoken": "^8.0.1",
+    "passport": "^0.4.0",
+    "passport-jwt": "^3.0.0",
+    "redis": "^2.8.0"
+  }
+}
