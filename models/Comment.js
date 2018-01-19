@@ -14,8 +14,13 @@ class CommentSet {
     this.title = `comment:${key}`
   }
 
-  async addComment(client, user, position, content){
-    const id = crypto.randomBytes(8).toString("hex");
+  async addComment(client, user, position, content, givenId=undefined){
+    const id = givenId || crypto.randomBytes(8).toString("hex");
+
+    if (this.commentExists(client, id)){
+      return this.editComment(client, id, {user, position, content})
+    }
+
     const dateModified = Math.floor(new Date() / 1000).toString()
 
     const comment = `${id}:${user}:${position}:${dateModified}:0:${content}`
@@ -33,7 +38,14 @@ class CommentSet {
 
   async editComment(client, id, edits){
     try {
-      const result = await iterateThroughSet(client, 0, `^${id}:`)[0]
+      let result = await this.iterateThroughSet(client, 0, `${id}:*`)
+
+      if (result.length < 0){
+        throw new Error(`No comment with ID: ${id}`)
+      } else {
+        result = result[0][0]     // result will be an array of array of strings from sscan
+      }
+
       const removed = await client.sremAsync(this.title, result)
       const splitSet = result.split(':')
 
@@ -41,16 +53,22 @@ class CommentSet {
         throw new Error('Invalid comment ${result}')
       }
 
-      Object.entries(edits).map((key, value) => {
-        const keyIndex = FIELDS.indexOf(key)
+      console.log('foo', splitSet);
+
+      Object.entries(edits).map(entry => {
+        const keyIndex = FIELDS.indexOf(entry[0])
+        console.log(entry[0]);
         if (keyIndex !== -1){
-          splitSet[keyIndex] = value
+          splitSet[keyIndex] = entry[1]
         }
       })
 
+      console.log('bar', splitSet);
+
       splitSet[3] = Math.floor(new Date() / 1000).toString()
 
-      const addResult = await client.saddAsync(this.title, splitSet)
+      console.log('baz', splitSet);
+      const addResult = await client.saddAsync(this.title, splitSet.join(':'))
       return addResult === 1
     } catch (e) {
       throw new Error(`Could not edit comment: ${e}`)
@@ -61,23 +79,37 @@ class CommentSet {
     try {
       const returnSet = new Set();
       const reply = await client.sscanAsync(this.title, cursor, 'match', pattern);
-      returnSet.add(reply[1])
-      return cursor === '0' ? Array.from(returnSet) : iterateThroughSet(client, reply[0], pattern)
+      returnSet.add(reply[1]);
+      return cursor === '0' ? Array.from(returnSet) : this.iterateThroughSet(client, reply[0], pattern)
     } catch (e) {
       throw new Error(`Could not commit comment: ${e}`)
     }
-
   }
 
-  async getAllComments(client){
+  async getAllComments(client, includeDeleted=false){
+    const pattern = includeDeleted ? "*" : "*:*:*:*:0:*"
     try {
-      console.log('GETTING ALL COMMENTS');
-      return await client.smembersAsync(`comment:${this.title}`);
+      return this.iterateThroughSet(client, 0, pattern)
     } catch (e) {
       throw new Error(`Could not get comment list: ${e}`)
     }
   }
 
+  async commentExists(client, id){
+    try {
+      return await this.iterateThroughSet(client, 0, `${id}:*`) !== 0
+    } catch (e) {
+        throw new Error(`Could not determine if ${id} exists`)
+    }
+  }
+
+  async deleteComment(client, id){
+    try {
+      this.editComment(client, id, {deleted: 1})
+    } catch (e){
+      throw new Error(`Could not delete comment for id ${id}`)
+    }
+  }
 }
 
 module.exports = CommentSet
